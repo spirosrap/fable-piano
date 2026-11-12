@@ -112,8 +112,8 @@
   #humHead { height: 262px; background: #000; color: var(--dim); font-size: 11.5px; line-height: 1.6; display: grid; place-items: center; text-align: center; }
   #humMsg { position: absolute; left: 0; right: 0; top: 232px; text-align: center; color: var(--gold2); font-family: var(--serif); font-style: italic; font-size: 14px; text-shadow: 0 1px 6px #000; pointer-events: none; padding: 0 8px; }
   #humMsg[hidden] { display: none; }
-  .humctl { display: grid; grid-template-columns: auto auto 1fr; gap: 6px; align-items: center; padding: 7px 8px; border-top: 1px solid var(--line); }
-  .humctl select { background: #12141c; color: #cfc9ba; border: 1px solid #2c3040; border-radius: 3px; font: inherit; font-size: 11.5px; padding: 3px 4px; }
+  .humctl { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: center; padding: 7px 8px; border-top: 1px solid var(--line); }
+  .humctl select { min-width: 0; background: #12141c; color: #cfc9ba; border: 1px solid #2c3040; border-radius: 3px; font: inherit; font-size: 11.5px; padding: 3px 4px; }
   .transport { display: flex; align-items: center; gap: 8px; }
   .skip { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: none; color: var(--dim); cursor: pointer; display: grid; place-items: center; transition: .15s; }
   .skip:hover { color: var(--gold2); border-color: var(--gold); }
@@ -179,7 +179,7 @@
     #humHead { height: 168px; }
     #humMsg { top: 140px; font-size: 12px; }
     .humctl { grid-template-columns: 1fr 1fr; }
-    .humctl input { grid-column: 1 / -1; }
+    #humMood, .humctl input { grid-column: 1 / -1; }
   }
 </style>
 </head>
@@ -204,6 +204,7 @@
       <div class="humctl">
         <select id="humSyl" title="What it sings" aria-label="What it sings"><option value="la">la la</option><option value="da">da da</option><option value="doo">doo doo</option><option value="na">na na</option><option value="ah">ahh</option></select>
         <select id="humVoice" title="Who sings" aria-label="Who sings"><option value="high">high voice</option><option value="low">low voice</option><option value="child">child</option></select>
+        <select id="humMood" title="How seriously it takes the job" aria-label="How seriously it takes the job"><option value="straight">in earnest</option><option value="goofy">goofy</option><option value="unhinged">unhinged</option></select>
         <input type="range" id="humVol" min="0" max="1" step="0.01" title="How loud it hums" aria-label="Hum volume">
       </div>
     </div>
@@ -239,6 +240,7 @@
       Click the keys, or play with <kbd>Z</kbd>–<kbd>M</kbd> / <kbd>Q</kbd>–<kbd>I</kbd> (the lower you click on a key, the harder it strikes).<br>
       <kbd>Space</kbd> play / pause · <kbd>Shift</kbd> pedal · <kbd>L</kbd> library · <kbd>[</kbd> <kbd>]</kbd> previous / next<br>
       <b style="color:#cfc9ba;font-weight:500">Hum along</b> puts a simulated voice beside the piano: it picks out the tune and hums it, a few seconds of singing prepared ahead of the music.
+      Set to <i>goofy</i> or <i>unhinged</i> it stops taking the job seriously: it scats, sings words, drifts out of tune, cracks, beatboxes, and talks in the rests.
       <div class="btns">
         <button id="silent">Hold silently</button>
         <button id="unlatch">Release held</button>
@@ -655,7 +657,9 @@ async function playPiece(p, k = 0) {
     try {
       const r = await fetch(`scores/${p.score}.json`);
       if (!r.ok) throw new Error('HTTP ' + r.status);
-      const data = await r.json(), build = opts => buildScore(data, opts);
+      let data = await r.json();
+      if (p.only !== undefined) { const m = data.movements[p.only]; data = { ...data, movements: [m], html: `${data.html} — ${esc(m.title)}` }; } // one movement on its own
+      const build = opts => buildScore(data, opts);
       s = build({ expr: parseFloat($('c_expr').value), spread: parseFloat($('c_spread').value) });
       head = { build, plain: p.t, title: data.html, sub: `${data.composer} — played from the score by this piano’s own performer` };
     } catch (e) {
@@ -1004,6 +1008,6 @@ function lowerBar(t) { let lo = 0, hi = song.bars.length - 1; while (lo < hi) { 
 addEventListener('resize', layout);
 layout(); requestAnimationFrame(frame);
 </script>
-<script src="hum.js"></script>
+<script src="hum.js?v=2"></script>
 </body>
 </html>

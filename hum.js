@@ -7,7 +7,7 @@
 //  stretch, and each stretch is started on the piano's own audio clock. The head is drawn from the
 //  mouth movement the engine recorded while it rendered the sound.
 //
-//  This file reads the page's state (NOTES, song, st, rate, ctx, songGen, position) and never changes it.
+//  This file reads the page's state (NOTES, song, st, rate, ctx, songGen, position, current) and never changes it.
 // ====================================================================
 (() => {
   const VOICES = { // body, and the notes it hums comfortably (MIDI)
@@ -16,10 +16,12 @@
     child: { body: { female: 0, child: 1 }, lo: 60, hi: 79 },
   };
   const SYLLABLES = { la: { onset: 'l', vowel: 'ɑ' }, da: { onset: 'd', vowel: 'ɑ' }, doo: { onset: 'd', vowel: 'u' }, na: { onset: 'n', vowel: 'ɑ' }, ah: { onset: '', vowel: 'ɑ' } };
+  const MOODS = { straight: 0, goofy: 0.4, unhinged: 0.9 }; // how often it fools around, phrase by phrase
   const WASM = new URL('hum/chimera.wasm', document.baseURI).href;
-  const settings = Object.assign({ on: false, voice: 'high', syl: 'la', vol: 0.3 }, store.get('hum', {}));
+  const settings = Object.assign({ on: false, voice: 'high', syl: 'la', vol: 0.3, mood: 'goofy' }, store.get('hum', {}));
   if (!VOICES[settings.voice]) settings.voice = 'high';
   if (!SYLLABLES[settings.syl]) settings.syl = 'la';
+  if (!(settings.mood in MOODS)) settings.mood = 'goofy';
   const save = () => store.set('hum', settings);
 
   // ------------------------------------------------------------------ the tune to hum
@@ -80,32 +82,173 @@
     return mel;
   }
 
+  // ------------------------------------------------------------------ fooling around
+  // In the goofy moods the hummer does more than hum. Phrase by phrase it may scat, sing words or the
+  // composer's name, go out of tune, start on the wrong note, croon, trill, crack or beatbox, and it fills
+  // the rests with laughs, yawns and remarks. Everything here only rewrites the list of notes to sing.
+  const syl = spec => { const [o, v, c] = spec.split('.'); return { onset: o ? o.split('+') : [], vowel: v, coda: c ? c.split('+') : [] }; }; // "b+l.ɑ.m": consonants . vowel . consonants
+  const line = (text, specs, more) => Object.assign({ text, syls: specs.split(' ').map(syl) }, more);
+  const SCAT = [ // sung round and round for the whole phrase
+    line('doo bee doo bah', 'd.u. b.i. d.u. b.ɑ.'), line('bom bom ba dum', 'b.ɑ.m b.ɑ.m b.ə. d.ʌ.m'), line('dee dle dee dle', 'd.i. d.ə.l'),
+    line('shoo bee doo wah', 'ʃ.u. b.i. d.u. w.ɑ.'), line('zoom zoom', 'z.u.m'), line('pom pa rom', 'p.ɑ.m p.ə. ɹ.ɑ.m'), line('wah wah', 'w.ɑ.'),
+    line('blah blah blah', 'b+l.ɑ.'), line('nee nah noo', 'n.i. n.ɑ. n.u.'), line('yada yada', 'j.ɑ. d.ə.'), line('meow meow', 'm+j.aʊ.'),
+    line('quack quack', 'k+w.æ.k'), line('ding dong', 'd.ɪ.ŋ d.ɔ.ŋ'), line('cuckoo', 'k.ʊ. k.u.'), line('boing boing', 'b.ɔɪ.ŋ'), line('moo', 'm.u.'),
+    line('figaro figaro', 'f.i. g.ɑ. ɹ.oʊ.'), line('ee i ee i oh', '.i. .aɪ. .i. .aɪ. .oʊ.'),
+  ];
+  const WORDS = [ // sung once (or as often as they fit whole), the rest of the phrase is hummed
+    line("I don't know the words", '.aɪ. d.oʊ.n+t n.oʊ. ð.ə. w.ɝ.d+z'), line('what comes next', 'w.ʌ.t k.ʌ.m+z n.ɛ.k+s+t'),
+    line('I am a piano', '.aɪ. .æ.m .ə. p.i. .æ. n.oʊ.'), line('is it lunch yet', '.ɪ.z .ɪ.t l.ʌ.n+tʃ j.ɛ.t'), line('banana', 'b.ə. n.æ. n.ə.'),
+    line('this is the good bit', 'ð.ɪ.s .ɪ.z ð.ə. g.ʊ.d b.ɪ.t'), line('nobody is listening', 'n.oʊ. b.ɑ. d.i. .ɪ.z l.ɪ. s.ə. n.ɪ.ŋ'),
+    line('la la la something something', 'l.ɑ. l.ɑ. l.ɑ. s.ʌ.m θ.ɪ.ŋ s.ʌ.m θ.ɪ.ŋ'), line('my nose itches', 'm.aɪ. n.oʊ.z .ɪ. tʃ.ɪ.z'),
+    line('hallelujah', 'h.ɑ. l.eɪ. l.u. j.ɑ.'), line('I can do this all day', '.aɪ. k.æ.n d.u. ð.ɪ.s .ɔ.l d.eɪ.'),
+    line('too many notes', 't.u. m.ɛ. n.i. n.oʊ.t+s', { fast: true }), line('slow down please', 's+l.oʊ. d.aʊ.n p+l.i.z', { fast: true }),
+    line('are we there yet', '.ɑ.ɹ w.i. ð.ɛ.ɹ j.ɛ.t', { slow: true }), line('so sleepy', 's.oʊ. s+l.i. p.i.', { slow: true }),
+  ];
+  const NAMES = [ // the composer's name, on the tune
+    [/Beethoven/, 'Beet-ho-ven', 'b.eɪ.t h.oʊ. v.ə.n'], [/Chopin/, 'Cho-pin', 'ʃ.oʊ. p.æ.n'], [/Bach/, 'Bach', 'b.ɑ.x'], [/Mozart/, 'Mo-zart', 'm.oʊ.t s.ɑ.ɹ+t'],
+    [/Schubert/, 'Schu-bert', 'ʃ.u. b.ɝ.t'], [/Liszt/, 'Liszt', 'l.ɪ.s+t'], [/Debussy/, 'De-bus-sy', 'd.ə. b+j.u. s.i.'], [/Rachmaninoff/, 'Rach-ma-ni-noff', 'ɹ.ɑ.k m.ɑ. n.i. n.ɔ.f'],
+    [/Scarlatti/, 'Scar-lat-ti', 's+k.ɑ.ɹ l.ɑ. t.i.'], [/Schumann/, 'Schu-mann', 'ʃ.u. m.ɑ.n'], [/Scriabin/, 'Scri-a-bin', 's+k+ɹ.i. .ɑ. b.ɪ.n'], [/Haydn/, 'Hay-dn', 'h.aɪ. d.ə.n'],
+    [/Brahms/, 'Brahms', 'b+ɹ.ɑ.m+z'], [/Mendelssohn/, 'Men-dels-sohn', 'm.ɛ.n d.ə.l s.ə.n'], [/Tchaikovsky/, 'Tchai-kov-sky', 'tʃ.aɪ. k.ɔ.f s+k.i.'], [/Handel/, 'Han-del', 'h.æ.n d.ə.l'],
+    [/Fable/, 'Fa-ble', 'f.eɪ. b.ə.l'],
+  ].map(([re, text, specs]) => line(text, specs, { re }));
+  // spoken in a rest: [caption, IPA, seconds it takes]
+  const ASIDES = [['bravo!', 'ˈbɹɑvoʊ', 0.8], ['nice', 'naɪs', 0.65], ['oh yeah', 'oʊ ˈjɛ', 0.6], ['I love this bit', 'aɪ lʌv ðɪs bɪt', 1.15], ['so beautiful', 'soʊ ˈbjutɪfəl', 1.2], ['sorry', 'ˈsɑɹi', 0.7]];
+  const CUES = [['wait for it…', 'weɪt fɔɹ ɪt', 1.0], ['here it comes', 'hɪɹ ɪt kʌmz', 0.9], ['one more time', 'wʌn mɔɹ taɪm', 1.2], ['where were we?', 'wɛɹ wɝ wi', 0.95]];
+  const BEAT = ['B', 't', 'Pf', 't', 'B', 'B', 'Pf', 't']; // kick, hat, snare (the engine's beatbox pads)
+
+  // mel → { notes: what is sung, says: [{ t0, t1, text }] what the caption under the head says meanwhile }
+  function perform(mel, voice, level, composer, seed) {
+    if (!level || !mel.length) return { notes: mel, says: [] };
+    let s = seed >>> 0;
+    const R = () => { s = (s + 0x6D2B79F5) | 0; let x = Math.imul(s ^ (s >>> 15), 1 | s); x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x; return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
+    const pick = a => a[Math.floor(R() * a.length)], wild = level > 0.6, mid = (voice.lo + voice.hi) >> 1;
+    const name = NAMES.find(n => n.re.test(composer || ''));
+    // phrases: what is sung in one go (to a breath, or five seconds of it)
+    const phrases = []; let cur = null;
+    mel.forEach((n, i) => {
+      const p = mel[i - 1];
+      if (!cur || n.t - p.t - p.d > 0.15 || (!n.hold && n.t - cur[0].t > 5)) phrases.push(cur = []);
+      cur.push({ ...n });
+    });
+    const notes = [], says = []; let lastAct = '', lastFill = '', lastName = -30;
+    const sing = (ph, l, whole) => { // a line's syllables on the phrase's spoken notes
+      const spoken = ph.filter(n => !n.hold), upTo = whole ? spoken.length - spoken.length % l.syls.length : spoken.length;
+      spoken.forEach((n, k) => { if (k < upTo) n.syl = l.syls[k % l.syls.length]; });
+      return '♪ ' + l.text + ' ♪';
+    };
+    phrases.forEach((ph, pi) => {
+      const first = ph[0], end = ph[ph.length - 1], spoken = ph.filter(n => !n.hold);
+      let t1 = end.t + end.d;
+      const nextT = pi + 1 < phrases.length ? phrases[pi + 1][0].t : Infinity;
+      let rest = nextT - t1;
+      const len = t1 - first.t, ioi = len / spoken.length;
+      const long = ph.reduce((a, n) => n.d > a.d ? n : a);
+      const top = spoken.filter(n => n.d >= 0.5).reduce((a, n) => !a || n.m > a.m ? n : a, null);
+      const words = WORDS.filter(w => w.syls.length <= spoken.length && (!w.fast || ioi < 0.35) && (!w.slow || ioi > 0.9));
+      // what this phrase allows, and how much each is liked
+      const can = {};
+      if (spoken.length >= 3) Object.assign(can, { scat: 3, flat: 1.5, sharp: 1, lost: 1 });
+      if (words.length) can.words = 3;
+      if (name && name.syls.length <= spoken.length && first.t - lastName > 45) can.name = 2;
+      if (long.d >= 0.7) Object.assign(can, { oops: 1.5, trill: 1 });
+      if (top) can.crack = 1;
+      if (spoken.some(n => n.d >= 0.3)) can.croon = 1;
+      if (ioi > 0.4 && spoken.length >= 2) can.opera = 1;
+      if (spoken.length >= 5 && ioi < 0.5) can.beatbox = 3;
+      if (rest >= 1.6 && rest < Infinity && end.d >= 0.3) can.showoff = 1.5;
+      if (spoken.length >= 3 && ph.every(n => n.m - 12 >= voice.lo - 5)) can.basso = 1;
+      delete can[lastAct];
+      // a note or two is hardly a phrase: mostly left alone
+      let act = '', lot = Object.values(can).reduce((a, w) => a + w, 0);
+      if (lot && (R() < level * (spoken.length < 3 ? 0.35 : 1) || pi === 1)) { lot *= R(); for (const k in can) if ((lot -= can[k]) < 0) { act = k; break; } }
+      if (act === 'name') lastName = first.t;
+      let out = ph, said = '';
+      const split = (n, parts) => { out = out.flatMap(x => x === n ? parts : [x]); }; // one note → several
+      if (act === 'scat') said = sing(ph, pick(SCAT), false);
+      else if (act === 'words') said = sing(ph, pick(words), true);
+      else if (act === 'name') said = sing(ph, name, true);
+      else if (act === 'flat') { const depth = wild ? 1.6 : 0.8; for (const n of ph) n.m -= depth * (n.t - first.t) / Math.max(len, 0.5); said = wild ? '…very flat' : '…a little flat'; }
+      else if (act === 'sharp') { for (const n of ph) n.m += wild ? 0.9 : 0.5; said = wild ? '…very sharp' : '…a little sharp'; }
+      else if (act === 'lost') { for (const n of ph) if (R() < (wild ? 0.6 : 0.35)) n.m += pick([-2, -1, 1, 2, 3]); said = '(guessing)'; }
+      else if (act === 'oops') { // starts on the wrong note, then finds the right one
+        const cut = Math.min(0.4, long.d * 0.4);
+        split(long, [{ ...long, d: cut, m: long.m + pick([-2, -1, 1, 2]) }, { t: long.t + cut, d: long.d - cut, m: long.m, hold: true }]); said = 'oops';
+      } else if (act === 'trill') {
+        const parts = [], n = Math.floor(Math.min(long.d - 0.3, 1.3) / 0.09);
+        for (let k = 0; k < n; k++) parts.push({ ...long, t: long.t + k * 0.09, d: 0.09, m: long.m + (k % 2 ? 2 : 0), hold: k ? true : long.hold });
+        parts.push({ t: long.t + n * 0.09, d: long.d - n * 0.09, m: long.m, hold: true });
+        split(long, parts); said = '(trill)';
+      } else if (act === 'crack') {
+        const a = top.d * 0.4;
+        split(top, [{ ...top, d: a }, { t: top.t + a, d: 0.11, m: Math.min(top.m + 12, 88), hold: true }, { t: top.t + a + 0.11, d: top.d - a - 0.11, m: top.m, hold: true }]); said = '(voice crack)';
+      } else if (act === 'croon') { // slides up into every note
+        for (const n of spoken) if (n.d >= 0.3) split(n, [{ ...n, d: 0.12, m: n.m - 3 }, { t: n.t + 0.12, d: n.d - 0.12, m: n.m, hold: true }]);
+        said = '(crooning)';
+      } else if (act === 'opera') { for (const n of ph) { n.vib = wild ? 170 : 110; if (!n.hold) n.syl = syl('.ɑ.'); } said = '(operatic)'; }
+      else if (act === 'beatbox') { out = spoken.map((n, k) => ({ t: n.t, d: 0.1, m: n.m, beat: BEAT[k % BEAT.length] })); said = 'boots and cats'; }
+      else if (act === 'showoff') { const more = Math.min(2.5, rest - 0.5); end.d += more; end.vib = wild ? 150 : 90; t1 += more; rest -= more; said = '(showing off)'; }
+      else if (act === 'basso') { for (const n of ph) { n.m -= 12; if (!n.hold) n.syl = syl('b.ɑ.m'); } said = 'bom bom bom'; }
+      else if (wild) for (const n of ph) n.m += (R() - 0.5) * 0.5; // never quite on the note
+      if (act) lastAct = act;
+      notes.push(...out);
+      if (said) says.push({ t0: first.t - 0.15, t1, text: said });
+      // something for the rest that follows
+      if (act === 'showoff' || rest < 2 || R() > level * 0.8) return;
+      const fills = ['laugh', 'ahem'], t = t1 + 0.4, final = nextT === Infinity;
+      if (final) fills.push('tada', 'tada', 'bravo');
+      else { if (rest >= 2.6) fills.push('aside'); if (rest >= 3) fills.push('cue'); if (rest >= 3.6) fills.push('yawn'); }
+      const fill = pick(fills.filter(f => f !== lastFill)); lastFill = fill;
+      const say = ([text, ipa, d], at) => { notes.push({ t: at, d, m: voice.lo + 1, say: ipa }); says.push({ t0: at - 0.1, t1: at + d + 0.4, text }); };
+      if (fill === 'laugh') {
+        const n = 4 + Math.floor(R() * 2);
+        for (let k = 0; k < n; k++) notes.push({ t: t + k * 0.17, d: 0.17, m: mid + 4 - 1.5 * k, syl: syl('h.ɑ.') });
+        says.push({ t0: t - 0.1, t1: t + n * 0.17 + 0.3, text: 'ha ha ha' });
+      } else if (fill === 'ahem') {
+        notes.push({ t, d: 0.14, m: voice.lo + 4, syl: syl('ʔ.ə.') }, { t: t + 0.14, d: 0.4, m: voice.lo + 2, syl: syl('h.ɛ.m') });
+        says.push({ t0: t - 0.1, t1: t + 0.9, text: 'ahem' });
+      } else if (fill === 'yawn') {
+        notes.push({ t: t + 0.2, d: 0.5, m: mid + 4, syl: syl('h.ɑ.') });
+        for (let k = 0; k < 9; k++) notes.push({ t: t + 0.7 + k * 0.13, d: 0.13, m: mid + 3 - k, hold: true });
+        says.push({ t0: t, t1: t + 2.2, text: '*yawn*' });
+      } else if (fill === 'tada') {
+        notes.push({ t: t + 0.2, d: 0.18, m: mid, syl: syl('t.ə.') }, { t: t + 0.38, d: 1.3, m: mid + 5, syl: syl('d.ɑ.'), vib: 90 });
+        says.push({ t0: t + 0.1, t1: t + 2, text: 'ta-daa!' });
+      } else if (fill === 'bravo') say(ASIDES[0], t + 0.2);
+      else if (fill === 'aside') say(pick(ASIDES.filter(a => a[2] <= rest - 1.4)), t);
+      else if (fill === 'cue') { const c = pick(CUES); say(c, nextT - c[2] - 0.8); }
+    });
+    return { notes, says };
+  }
+
   // ------------------------------------------------------------------ rendering ahead
   let on = false, ready = false, head = null, headModule = null, out = null;
-  let mel = [], melKey = '', chunks = [], chunkRate = 1, epoch = 0;
+  let mel = [], score = [], says = [], melKey = '', chunks = [], chunkRate = 1, epoch = 0, status = '';
   let workers = [], jobs = new Map(), jobSeq = 0;
   let lastPos = 0, lastT = null, rateSeen = 1, rateAt = 0, failed = false;
 
-  const msg = text => { $('humMsg').textContent = text; $('humMsg').hidden = !text; };
+  // under the head: what the page has to say (it is warming up, it stumbled), or else what the hummer is up to
+  let shown = null, heard = -1;
+  const caption = () => { const text = status || (says.find(x => x.t0 <= heard && heard < x.t1) || { text: '' }).text; if (text !== shown) { shown = text; $('humMsg').textContent = text; $('humMsg').hidden = !text; } };
+  const msg = text => { status = text; caption(); };
   const songPos = () => st.playing ? st.pos + (ctx.currentTime - st.now) * rate : st.pos; // the song time being rendered now
 
   // Stretches of the tune from `from` on. The first ones are short so the voice comes in soon.
   function buildChunks(from) {
     const list = []; let i = 0, target = 1.5;
-    while (i < mel.length && mel[i].t < from - 0.02) i++;
-    while (i < mel.length) {
-      const t0 = mel[i].t; let j = i;
+    while (i < score.length && score[i].t < from - 0.02) i++;
+    while (i < score.length) {
+      const t0 = score[i].t; let j = i;
       for (;;) {
-        const n = mel[j++], len = (n.t + n.d - t0) / chunkRate;
-        if (j >= mel.length) break;
-        const gap = mel[j].t - (n.t + n.d);
-        if (len >= target && (gap > 0.12 || !mel[j].hold)) break; // cut at a breath or before a spoken note
+        const n = score[j++], len = (n.t + n.d - t0) / chunkRate;
+        if (j >= score.length) break;
+        const gap = score[j].t - (n.t + n.d);
+        if (len >= target && (gap > 0.12 || !score[j].hold)) break; // cut at a breath or before a spoken note
         if (len >= target * 1.6) break;
       }
-      const lastNote = mel[j - 1];
+      const lastNote = score[j - 1];
       list.push({
-        t0, t1: j < mel.length ? mel[j].t : lastNote.t + lastNote.d + 0.5, tEnd: lastNote.t + lastNote.d,
-        notes: mel.slice(i, j).map(n => ({ midi: n.m, start: (n.t - t0) / chunkRate, duration: Math.max(0.06, n.d / chunkRate), hold: n.hold })),
+        t0, t1: j < score.length ? score[j].t : lastNote.t + lastNote.d + 0.5, tEnd: lastNote.t + lastNote.d,
+        notes: score.slice(i, j).map(n => ({ midi: n.m, start: (n.t - t0) / chunkRate, duration: Math.max(0.06, n.d / chunkRate), hold: n.hold, syl: n.syl, vib: n.vib, beat: n.beat, say: n.say })),
         buf: null, track: null, lead: 0.35, src: null, job: 0, done: false,
       });
       i = j; target = Math.min(6, target * 1.4);
@@ -128,7 +271,7 @@
     let w = workers.find(x => !x.busy);
     // rendering runs at about twice real time on an idle core and less on a busy machine, so a few share the work
     if (!w && workers.length < Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 4) >> 2))) {
-      w = new Worker(new URL('hum/worker.js', document.baseURI), { type: 'module' });
+      w = new Worker(new URL('hum/worker.js?v=2', document.baseURI), { type: 'module' });
       w.busy = false;
       w.onmessage = e => {
         const m = e.data, job = jobs.get(m.id); jobs.delete(m.id); w.busy = false;
@@ -147,13 +290,16 @@
   }
   function tick() {
     if (!on || !ready || !ctx) return;
-    const key = songGen + '/' + settings.voice;
-    if (key !== melKey) { // another piece, or another singer
+    const key = songGen + '/' + settings.voice + '/' + settings.mood;
+    if (key !== melKey) { // another piece, another singer, or another mood
       melKey = key; failed = false;
       mel = extractMelody(NOTES, song.ped || [], VOICES[settings.voice], isSonata);
+      const act = perform(mel, VOICES[settings.voice], MOODS[settings.mood], current.p ? current.p.c : '', window.fableHum.seed || Math.random() * 2 ** 32);
+      score = act.notes; says = act.says;
       restart('piece'); msg(mel.length ? 'Listening to the piece…' : 'Nothing to hum in this one.');
     }
     const now = ctx.currentTime;
+    heard = st.playing ? position() : -1; caption();
     if (rate !== rateSeen) { rateSeen = rate; rateAt = performance.now(); silence(); } // the tempo slider is moving
     if (!st.playing) { silence(); lastPos = st.pos; lastT = null; return; }
     if (rate !== chunkRate && performance.now() - rateAt < 350) return;
@@ -223,7 +369,7 @@
       out.connect(verb); verb.connect(wet); wet.connect(ctx.destination);
     }
     try {
-      headModule = headModule || await import('./hum/head.js');
+      headModule = headModule || await import('./hum/head.js?v=2');
       const h = await headModule.createHead($('humHead'), WASM, VOICES[settings.voice].body);
       if (!on) { h.dispose(); return; }
       head = h;
@@ -248,9 +394,10 @@
   $('humSyl').value = settings.syl; $('humVoice').value = settings.voice; $('humVol').value = settings.vol;
   $('humSyl').onchange = e => { settings.syl = e.target.value; save(); if (ready) { restart('syllable'); msg('Listening to the piece…'); tick(); } };
   $('humVoice').onchange = e => { settings.voice = e.target.value; save(); if (head) head.setBody(VOICES[settings.voice].body); tick(); };
+  if ($('humMood')) { $('humMood').value = settings.mood; $('humMood').onchange = e => { settings.mood = e.target.value; save(); tick(); }; } // (a page cached from before the moods has no such control)
   $('humVol').oninput = e => { settings.vol = parseFloat(e.target.value); save(); if (out) out.gain.setTargetAtTime(settings.vol, ctx.currentTime, 0.03); };
   // Runs in a background tab too (once a second there, which the few seconds of look-ahead cover).
   setInterval(() => { if (settings.on && !on && ctx) enable(); tick(); }, 200);
-  window.fableHum = { extractMelody, state: () => ({ on, ready, head: !!head, notes: mel.length, chunks: chunks.length, rendered: chunks.filter(c => c.buf).length, sounding: chunks.filter(c => c.src).length, done: chunks.filter(c => c.done).length, workers: workers.length, failed, why,
+  window.fableHum = { extractMelody, perform, state: () => ({ on, ready, head: !!head, mood: settings.mood, notes: mel.length, sung: score.length, says: says.length, caption: shown, chunks: chunks.length, rendered: chunks.filter(c => c.buf).length, sounding: chunks.filter(c => c.src).length, done: chunks.filter(c => c.done).length, workers: workers.length, failed, why,
     first: chunks.slice(0, 8).map(c => `${c.t0.toFixed(1)}-${c.t1.toFixed(1)} ${c.src ? 'sounding' : c.buf ? 'ready' : c.job ? 'rendering' : c.done ? 'done' : 'waiting'}${c.ms ? ' ' + c.ms + 'ms' : ''}${c.late ? ' late ' + c.late : ''}`) }) };
 })();

@@ -17,6 +17,7 @@ soundboard, no samples anywhere. So are the three-movement “Fable” sonata wr
 - **The Moonlight Sonata**, all three movements, which the dataset lacks. It is not a recording: the notes come from the
   Mutopia Project's engraved score, and the piano's own performer (the one that plays the “Fable” sonata) plays them, with
   the edition's dynamics, pedalling and tempo written out in `tools/build_scores.py`. The two performer sliders work on it.
+  Its finale, the Presto agitato, is also in the library on its own.
 - Search by composer or title, browse by composer, a “Well known” shelf, starred pieces and recently played.
 - Where a work was recorded more than once, each performance can be chosen by its year.
 - Continuous play, shuffle, previous / next. Moving on to the next piece also works while the tab is in the background.
@@ -24,6 +25,11 @@ soundboard, no samples anywhere. So are the three-movement “Fable” sonata wr
   whatever is playing, on "la", "da", "doo", "na" or "ah", in a high, low or child's voice. The page picks the top line out of
   the piano part, moves it into the singer's range, and has the voice engine render it a few seconds ahead of the music in
   background workers; each stretch then starts on the piano's own audio clock, and the head moves as the engine's mouth did.
+- **Goofy and unhinged**: the hummer need not take the job seriously. In these two moods it picks something to do phrase by
+  phrase: scat ("doo bee doo bah", "meow meow"), sing words ("I don't know the words", "too many notes") or the composer's
+  name, drift flat or sharp, start on the wrong note and fix it, croon, trill, crack, sing it as opera, beatbox, or hold the
+  last note far too long. In the rests it laughs, clears its throat, yawns or says something ("wait for it…", "bravo!").
+  A caption under the head says what it is up to. "In earnest" is the plain hum.
 - The interface in English.
 
 The original sonata is still there (first in the library), and so is opening or dropping any MIDI file of your own.
@@ -54,8 +60,8 @@ sonata and dropped MIDI files play.
 | `library.js` | the catalogue, generated |
 | `scores/` | pieces played from a score: `src/` the engraved notes (LilyPond's MIDI), `<id>.json` the reading of them, `index.js` their catalogue |
 | `tools/build_scores.py` | builds `scores/`; tempo, dynamics by bar, voicing and pedalling of each score are written there |
-| `hum.js` | hum-along: picking the tune, rendering ahead, keeping time with the piano |
-| `hum/` | the voice engine and its head, built by `hum/build.sh` from a CHIMERA checkout (`hum/src/` is the glue; `head.js`, `worker.js` and `chimera.wasm` are build output) |
+| `hum.js` | hum-along: picking the tune, the goofy moods (`perform`), rendering ahead, keeping time with the piano |
+| `hum/` | the voice engine and its head, built by `hum/build.sh` from a CHIMERA checkout (`hum/src/` is the glue, `render.ts` there turns a list of notes into sound; `head.js`, `worker.js` and `chimera.wasm` are build output) |
 | `pieces/` | the performances as MIDI, with `index.csv` mapping each file back to its MAESTRO name |
 | `tools/build_library.py` | rebuilds `library.js` and `pieces/` from the dataset; the “Well known” shelf is a list of patterns at its top |
 
