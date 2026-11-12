@@ -1,6 +1,9 @@
 # Fable Piano — library edition
 
-A physically modelled piano that runs in the browser, with a library of 1,276 recorded concert performances to play on it.
+A physically modelled piano that runs in the browser, with a library of 1,276 recorded concert performances to play on it
+and a simulated voice that hums along.
+
+**Live: https://agenticspiros.com/fable-piano/**
 
 This is built on **[Fable Piano](https://kishida.github.io/webdemos/instruments/piano-fable/index.html) by [kishida](https://github.com/kishida)**
 ([source](https://github.com/kishida/webdemos/tree/main/instruments/piano-fable)), made with Fable 5.2.
@@ -14,6 +17,10 @@ soundboard, no samples anywhere. So are the three-movement “Fable” sonata wr
 - Search by composer or title, browse by composer, a “Well known” shelf, starred pieces and recently played.
 - Where a work was recorded more than once, each performance can be chosen by its year.
 - Continuous play, shuffle, previous / next. Moving on to the next piece also works while the tab is in the background.
+- **Hum along**: a head from the [CHIMERA](https://github.com/jamesondh/chimera-vocal-synth) voice engine hums the tune of
+  whatever is playing, on "la", "da", "doo", "na" or "ah", in a high, low or child's voice. The page picks the top line out of
+  the piano part, moves it into the singer's range, and has the voice engine render it a few seconds ahead of the music in
+  background workers; each stretch then starts on the piano's own audio clock, and the head moves as the engine's mouth did.
 - The interface in English.
 
 The original sonata is still there (first in the library), and so is opening or dropping any MIDI file of your own.
@@ -42,6 +49,8 @@ sonata and dropped MIDI files play.
 | `index.html` | the page: interface, sequencer and library (upstream's page, extended) |
 | `engine.js`, `score.js`, `midi.js` | the piano model, the sonata and the MIDI reader, unchanged from upstream commit [`1123b16`](https://github.com/kishida/webdemos/commit/1123b16140723011a086bb4b4613afebbdbad192) |
 | `library.js` | the catalogue, generated |
+| `hum.js` | hum-along: picking the tune, rendering ahead, keeping time with the piano |
+| `hum/` | the voice engine and its head, built by `hum/build.sh` from a CHIMERA checkout (`hum/src/` is the glue; `head.js`, `worker.js` and `chimera.wasm` are build output) |
 | `pieces/` | the performances as MIDI, with `index.csv` mapping each file back to its MAESTRO name |
 | `tools/build_library.py` | rebuilds `library.js` and `pieces/` from the dataset; the “Well known” shelf is a list of patterns at its top |
 
@@ -54,4 +63,8 @@ sonata and dropped MIDI files play.
   untouched; the page trims the silence before the first note when it loads one.
   Curtis Hawthorne, Andriy Stasyuk, Adam Roberts, Ian Simon, Cheng-Zhi Anna Huang, Sander Dieleman, Erich Elsen, Jesse Engel
   and Douglas Eck. “Enabling Factorized Piano Music Modeling and Generation with the MAESTRO Dataset.” ICLR 2019.
-- **The additions in this repository** (the library, the queue, the English text, the build script) are free to reuse.
+- **The humming voice** is the [CHIMERA vocal synth](https://github.com/jamesondh/chimera-vocal-synth) by Jameson Hodge,
+  MIT ([licence](hum/LICENSE-chimera)), built from the revision in `hum/CHIMERA-REVISION` of
+  [spirosrap/chimera-song-mouth](https://github.com/spirosrap/chimera-song-mouth). Its head is drawn with
+  [three.js](https://threejs.org) (MIT), which is bundled into `hum/head.js`.
+- **The additions in this repository** (the library, the queue, the hum-along glue, the English text, the build scripts) are free to reuse.
