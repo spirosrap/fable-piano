@@ -448,5 +448,6 @@
   }
 
   root.buildSonata = buildSonata;
+  root.FableMovement = Movement; // added in the library edition: the performer, for other scores (see README)
   if (typeof module !== 'undefined' && module.exports) module.exports = { buildSonata };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -9,7 +9,8 @@
   Fable Piano, library edition.
   The piano engine (engine.js), the "Fable" sonata (score.js), the MIDI reader (midi.js) and the page this file is
   built on are by kishida: https://github.com/kishida/webdemos/tree/main/instruments/piano-fable
-  The library, the English text, the playback queue and the hum-along (hum.js, hum/) were added here. See README.md.
+  The library, the English text, the playback queue, the hum-along (hum.js, hum/) and the pieces played from a score
+  (scores/, one added line in score.js) were added here. See README.md.
 -->
 <title>Fable Piano</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a0b10'/%3E%3Cpath d='M5 9h22v15H5z' fill='%23ece6d8'/%3E%3Cpath d='M10 9h3v9h-3zM16 9h3v9h-3zM22 9h3v9h-3z' fill='%230a0b10'/%3E%3Cpath d='M5 9h22' stroke='%23e9b96a' stroke-width='2'/%3E%3C/svg%3E">
@@ -229,8 +230,8 @@
       <div class="ctl"><label>Brightness</label><input type="range" id="c_bri" min="0" max="2" step="0.01" value="0.6"><output></output></div>
       <div class="ctl"><label>Pedal resonance</label><input type="range" id="c_sym" min="0" max="4" step="0.05" value="1"><output></output></div>
       <div class="ctl"><label>Hall reverb</label><input type="range" id="c_rev" min="0" max="0.7" step="0.01" value="0.22"><output></output></div>
-      <div class="ctl"><label title="How much the player breathes and lingers. Applies to the Fable sonata only.">Pauses, rubato</label><input type="range" id="c_expr" min="0" max="2" step="0.05" value="1"><output>×1.00</output></div>
-      <div class="ctl"><label title="How much the player's hands and fingers shape the timing. Applies to the Fable sonata only.">Player's hands</label><input type="range" id="c_spread" min="0" max="2" step="0.05" value="1"><output>×1.00</output></div>
+      <div class="ctl"><label title="How much the player breathes and lingers. Applies to pieces played from a score: the Fable sonata and the Moonlight.">Pauses, rubato</label><input type="range" id="c_expr" min="0" max="2" step="0.05" value="1"><output>×1.00</output></div>
+      <div class="ctl"><label title="How much the player's hands and fingers shape the timing. Applies to pieces played from a score: the Fable sonata and the Moonlight.">Player's hands</label><input type="range" id="c_spread" min="0" max="2" step="0.05" value="1"><output>×1.00</output></div>
       <div class="ctl"><label>Tempo</label><input type="range" id="c_tempo" min="0.5" max="1.4" step="0.01" value="1"><output></output></div>
       <div class="ctl"><label>Volume</label><input type="range" id="c_vol" min="0" max="1.5" step="0.01" value="1"><output></output></div>
     </section>
@@ -259,6 +260,8 @@
       (<a href="https://kishida.github.io/webdemos/instruments/piano-fable/index.html" target="_blank" rel="noopener">original demo</a>).
       The library performances are from the <a href="https://magenta.tensorflow.org/datasets/maestro" target="_blank" rel="noopener">MAESTRO dataset</a>
       (CC BY-NC-SA 4.0): pianists of the International Piano-e-Competition, captured on a Disklavier.
+      The Moonlight Sonata is played from the <a href="https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=276" target="_blank" rel="noopener">Mutopia Project</a> score
+      typeset by Chris Sawer and Stewart Holmes (CC BY-SA 2.5).
       The humming head is the <a href="https://github.com/jamesondh/chimera-vocal-synth" target="_blank" rel="noopener">CHIMERA</a> voice engine by Jameson Hodge (MIT), drawn with three.js.
       This edition adds the library and the hum-along — <a href="https://github.com/spirosrap/fable-piano" target="_blank" rel="noopener">source</a>.
     </section>
@@ -312,6 +315,7 @@
 <script src="score.js"></script>
 <script src="midi.js"></script>
 <script src="library.js"></script>
+<script src="scores/index.js"></script>
 <script>
 'use strict';
 let curMv = -1, curSec = '', curBar = '', wasPlaying = null;
@@ -465,13 +469,13 @@ function buildMvButtons() {
 buildMvButtons();
 
 // ---- 人間らしいタイミングの量（組み込みのソナタだけ。0 = 楽譜どおり） ----
-let isSonata = true;
+let isSonata = true, scoreBuilder = buildSonata; // the piece is built from a score by the performer, so these two sliders apply
 const interpChange = () => {
   if (!isSonata) return;
   // いまの位置を「小節 + 小節内の割合」で覚えて、作り直した曲の同じ場所へ移る
   const pos = position(), i = lowerBar(pos), b0 = song.bars[i].t, b1 = i + 1 < song.bars.length ? song.bars[i + 1].t : song.dur;
   const fr = pos < b0 ? 0 : Math.min(1, (pos - b0) / (b1 - b0));
-  setSong(buildSonata({ expr: parseFloat($('c_expr').value), spread: parseFloat($('c_spread').value) }));
+  setSong(scoreBuilder({ expr: parseFloat($('c_expr').value), spread: parseFloat($('c_spread').value) }));
   const n0 = song.bars[i].t, n1 = i + 1 < song.bars.length ? song.bars[i + 1].t : song.dur, t = pos < b0 ? pos : n0 + fr * (n1 - n0);
   buildMvButtons(); drawMapBase();
   if (ctx) { sendSong(); seekTo(t); }
@@ -504,17 +508,41 @@ function seekTo(t) { t = Math.max(0, Math.min(END - 0.1, t)); send({ type: 'seek
 
 const SONATA_H1 = 'Piano Sonata in C minor <em>“Fable”</em>';
 const SONATA_SUB = 'A sonata in the manner of Beethoven, written by Fable 5.2 — played on a physically modelled piano';
-// head = { plain, title (html), sub, sonata? }
+// head = { plain, title (html), sub, build? }   build(opts) rebuilds the piece from its score when the performer's sliders move
 async function useSong(s, head) {
   await ensureAudio();
   $('veil').classList.add('off');
   setPlaying(false);
-  isSonata = !!head.sonata; $('c_expr').disabled = $('c_spread').disabled = !isSonata;
+  scoreBuilder = head.build || null; isSonata = !!scoreBuilder; $('c_expr').disabled = $('c_spread').disabled = !isSonata;
   setSong(s); sendSong(); send({ type: 'seek', t: 0 });
   st.pos = 0; st.now = ctx.currentTime; particles.length = 0;
   $('h1').innerHTML = head.title; $('h1sub').textContent = head.sub; document.title = head.plain + ' — Fable Piano';
   buildMvButtons(); drawMapBase(); curSec = curBar = null;
   await ctx.resume(); setPlaying(true);
+}
+
+// A score from scores/<id>.json (tools/build_scores.py), played by the performer in score.js, movement after movement as buildSonata does.
+function buildScore(data, opts) {
+  const expr = opts && opts.expr !== undefined ? opts.expr : 1, spread = opts && opts.spread !== undefined ? opts.spread : 1;
+  let off = 0.8;
+  const notes = [], ped = [], sections = [], movements = [], bars = [], marks = [];
+  data.movements.forEach((src, i) => {
+    const M = new FableMovement(src.title, src.sub, src.barLen, src.bpm);
+    M.notes = src.notes.map(n => ({ b: n[0], d: n[1], m: n[2], v: n[3], h: n[4] ? 'L' : 'R', stac: !!(n[5] & 1), acc: !!(n[5] & 2) }));
+    M.ped = src.ped.map(p => ({ b: p[0], type: p[1] }));
+    for (const t of src.tempo) M.tempo.push(t[2] ? { b: t[0], bpm: t[1], ramp: t[2] } : { b: t[0], bpm: t[1] });
+    M.sections = src.sections.map(s => ({ b: s[0], name: s[1] }));
+    M.beat = src.beats;
+    const mv = M.compile(src.seed, expr, spread);
+    movements.push({ t: off, title: mv.title, sub: mv.sub, dur: mv.dur, index: i });
+    for (const n of mv.notes) notes.push({ t: Math.max(0, n.t + off), d: n.d, m: n.m, v: n.v, h: n.h, f: n.f });
+    for (const p of mv.ped) ped.push({ t: p.t + off, down: p.down });
+    for (const s of mv.sections) sections.push({ t: s.t + off, name: s.name, mv: i });
+    for (const k of mv.marks) marks.push({ t: k.t + off, text: k.text });
+    mv.bars.forEach((t, k) => bars.push({ t: t + off, bar: k + 1, mv: i }));
+    off += mv.dur + (i + 1 < data.movements.length ? src.gap : 3.2);
+  });
+  return { title: data.title, titleEn: data.title, notes, ped, sections, movements, bars, marks, dur: off - 0.6 };
 }
 
 // A recorded performance has no score behind it: drop the bar grid (its ticks mean nothing) and the silence before the first note.
@@ -548,7 +576,7 @@ addEventListener('drop', e => { e.preventDefault(); document.body.classList.remo
 //  The library
 // ====================================================================
 const FABLE = { c: 'Fable 5.2', t: 'Piano Sonata in C minor “Fable”', f: 1, fable: true, takes: [{ id: 'fable', y: 2026, d: Math.round(song.dur) }] };
-const WORKS = [FABLE, ...(window.LIBRARY || [])];
+const WORKS = [FABLE, ...(window.SCORE_PIECES || []), ...(window.LIBRARY || [])];
 const fold = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); // "Études" is found by "etudes"
 for (const p of WORKS) { p.key = p.c + ' | ' + p.t; p.hay = fold(p.c + ' ' + p.t); p.names = p.fable ? [] : p.c.split(' / '); }
 const byKey = new Map(WORKS.map(p => [p.key, p]));
@@ -587,7 +615,7 @@ function renderList() {
   $('liblist').innerHTML = shown.map((p, i) => {
     const cur = p === current.p, k = cur ? current.k : 0, many = p.takes.length > 1;
     const chips = many ? `<div class="takes">${p.takes.map((t, j) => `<button class="tk${cur && j === k ? ' on' : ''}" data-k="${j}" title="${fmt(t.d)}">${takeLabel(p, j)}</button>`).join('')}</div>` : '<div class="takes"></div>';
-    const by = p.fable ? 'the sonata this piano was built to play' : many ? `${p.takes.length} performances` : `performed ${p.takes[0].y}`;
+    const by = p.fable ? 'the sonata this piano was built to play' : p.score ? 'played from the score' : many ? `${p.takes.length} performances` : `performed ${p.takes[0].y}`;
     return `<div class="row${cur ? ' cur' : ''}" data-i="${i}"><button class="star${stars.has(p.key) ? ' on' : ''}" title="Star" aria-label="Star">★</button>`
       + `<div class="rt"><b>${esc(p.t)}</b><span>${esc(p.c)} · ${by}</span></div>${chips}<span class="rd">${fmt(p.takes[k].d)}</span></div>`;
   }).join('');
@@ -622,7 +650,18 @@ async function playPiece(p, k = 0) {
   let s, head;
   if (p.fable) {
     s = buildSonata({ expr: parseFloat($('c_expr').value), spread: parseFloat($('c_spread').value) });
-    head = { sonata: true, plain: FABLE.t, title: SONATA_H1, sub: SONATA_SUB };
+    head = { build: buildSonata, plain: FABLE.t, title: SONATA_H1, sub: SONATA_SUB };
+  } else if (p.score) {
+    try {
+      const r = await fetch(`scores/${p.score}.json`);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json(), build = opts => buildScore(data, opts);
+      s = build({ expr: parseFloat($('c_expr').value), spread: parseFloat($('c_spread').value) });
+      head = { build, plain: p.t, title: data.html, sub: `${data.composer} — played from the score by this piano’s own performer` };
+    } catch (e) {
+      if (my === loadSeq) toast(location.protocol === 'file:' ? 'The library loads over http. Start the page with ./serve.sh instead of opening the file directly.' : `Could not load “${p.t}” (${e.message}).`);
+      return;
+    }
   } else {
     try {
       const r = await fetch(`pieces/${take.id}.mid`);
@@ -667,7 +706,7 @@ $('start').onclick = async () => {
   await playPiece(FABLE);
 };
 $('startLib').onclick = () => openLib(true);
-$('libCount').textContent = (WORKS.reduce((a, p) => a + p.takes.length, 0) - 1).toLocaleString('en');
+$('libCount').textContent = (window.LIBRARY || []).reduce((a, p) => a + p.takes.length, 0).toLocaleString('en');
 {
   const last = store.get('last', null), p = last && byKey.get(last.key);
   if (p && !p.fable) { $('resume').hidden = false; $('resume').textContent = `Continue with ${p.t}`; $('resume').onclick = () => playPiece(p, Math.min(last.k || 0, p.takes.length - 1)); }

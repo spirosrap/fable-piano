@@ -14,6 +14,9 @@ soundboard, no samples anywhere. So are the three-movement “Fable” sonata wr
 
 - **A library** of 764 works in 1,276 performances from the MAESTRO dataset: real pianists, recorded key by key and pedal by
   pedal, replayed on the modelled piano.
+- **The Moonlight Sonata**, all three movements, which the dataset lacks. It is not a recording: the notes come from the
+  Mutopia Project's engraved score, and the piano's own performer (the one that plays the “Fable” sonata) plays them, with
+  the edition's dynamics, pedalling and tempo written out in `tools/build_scores.py`. The two performer sliders work on it.
 - Search by composer or title, browse by composer, a “Well known” shelf, starred pieces and recently played.
 - Where a work was recorded more than once, each performance can be chosen by its year.
 - Continuous play, shuffle, previous / next. Moving on to the next piece also works while the tab is in the background.
@@ -47,8 +50,10 @@ sonata and dropped MIDI files play.
 | | |
 | --- | --- |
 | `index.html` | the page: interface, sequencer and library (upstream's page, extended) |
-| `engine.js`, `score.js`, `midi.js` | the piano model, the sonata and the MIDI reader, unchanged from upstream commit [`1123b16`](https://github.com/kishida/webdemos/commit/1123b16140723011a086bb4b4613afebbdbad192) |
+| `engine.js`, `score.js`, `midi.js` | the piano model, the sonata with its performer, and the MIDI reader, from upstream commit [`1123b16`](https://github.com/kishida/webdemos/commit/1123b16140723011a086bb4b4613afebbdbad192). Unchanged except for one added line at the end of `score.js`, which lets other scores use its performer |
 | `library.js` | the catalogue, generated |
+| `scores/` | pieces played from a score: `src/` the engraved notes (LilyPond's MIDI), `<id>.json` the reading of them, `index.js` their catalogue |
+| `tools/build_scores.py` | builds `scores/`; tempo, dynamics by bar, voicing and pedalling of each score are written there |
 | `hum.js` | hum-along: picking the tune, rendering ahead, keeping time with the piano |
 | `hum/` | the voice engine and its head, built by `hum/build.sh` from a CHIMERA checkout (`hum/src/` is the glue; `head.js`, `worker.js` and `chimera.wasm` are build output) |
 | `pieces/` | the performances as MIDI, with `index.csv` mapping each file back to its MAESTRO name |
@@ -63,6 +68,11 @@ sonata and dropped MIDI files play.
   untouched; the page trims the silence before the first note when it loads one.
   Curtis Hawthorne, Andriy Stasyuk, Adam Roberts, Ian Simon, Cheng-Zhi Anna Huang, Sander Dieleman, Erich Elsen, Jesse Engel
   and Douglas Eck. “Enabling Factorized Piano Music Modeling and Generation with the MAESTRO Dataset.” ICLR 2019.
+- **The Moonlight Sonata's score** is from the [Mutopia Project](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=276)
+  (Mutopia-2007/02/11-276), typeset by Chris Sawer and Stewart Holmes from the Berners edition of 1908, licensed
+  [CC BY-SA 2.5](https://creativecommons.org/licenses/by-sa/2.5/). `scores/src/moonlight*.mid` are its files as published;
+  `scores/moonlight.json` is derived from them (first ending left out, da capo added, dynamics, pedal and tempo added) and
+  is under the same licence.
 - **The humming voice** is the [CHIMERA vocal synth](https://github.com/jamesondh/chimera-vocal-synth) by Jameson Hodge,
   MIT ([licence](hum/LICENSE-chimera)), built from the revision in `hum/CHIMERA-REVISION` of
   [spirosrap/chimera-song-mouth](https://github.com/spirosrap/chimera-song-mouth). Its head is drawn with

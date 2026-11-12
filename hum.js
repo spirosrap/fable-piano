@@ -41,7 +41,7 @@
     for (let i = 0; i < notes.length;) {
       let j = i, top = notes[i];
       while (j < notes.length && notes[j].t - notes[i].t < 0.035) { if (notes[j].m > top.m) top = notes[j]; j++; }
-      tops.push({ t: top.t, m: top.m, v: top.v, d: Math.max(top.d, Math.min(sounding(top), 2.5)) });
+      tops.push({ t: top.t, m: top.m, v: top.v, d: Math.max(top.d, Math.min(sounding(top), 4)) });
       i = j;
     }
     // keep what belongs to the top line: near the highest notes of the moment, and not an inner or bass
@@ -51,17 +51,20 @@
       const c = tops[i];
       while (tops[a].t < c.t - 2.5) a++;
       while (b < tops.length && tops[b].t <= c.t + 2.5) b++;
-      let hi = 0; for (let k = a; k < b; k++) if (tops[k].m > hi) hi = tops[k].m;
+      let hi = 0, loud = 0; for (let k = a; k < b; k++) { if (tops[k].m > hi) hi = tops[k].m; if (tops[k].v > loud) loud = tops[k].v; }
       if (c.m < hi - 12) continue;
+      if (c.v < loud - 14) continue; // much softer than the line around it: accompaniment, however high it lies
       const prev = line[line.length - 1];
-      if (prev && prev.t + Math.min(prev.d, 1.2) > c.t + 0.03 && c.m < prev.m - 4 && c.v <= prev.v + 8) continue;
+      // under a note that still rings, a clearly lower note is accompaniment unless it is played like a melody note:
+      // louder at once, or at least as present once the held note has had its time
+      if (prev && prev.t + Math.min(prev.d, 4) > c.t + 0.03 && c.m < prev.m - 4 && (c.t - prev.t < 1.2 ? c.v <= prev.v + 8 : c.v < prev.v - 5)) continue;
       if (prev && c.t - prev.t < 0.1) continue; // faster than a voice can follow: the run is outlined instead
       line.push(c);
     }
     // lengths, and whether a note is spoken ("la") or only a change of pitch on the held vowel
     const mel = line.map((c, i) => {
       const next = line[i + 1], ioi = next ? next.t - c.t : Infinity;
-      let d = Math.min(Math.max(c.d, 0.12), ioi);
+      let d = Math.min(Math.max(Math.min(c.d, 2.5), 0.12), ioi);
       if (ioi - d < 0.15) d = ioi; // no gaps too short to breathe in
       return { t: c.t, d, m: c.m, hold: false };
     });
